@@ -17,9 +17,16 @@ You will have to create 3 plots based on the datasets and instructions detailed 
 -   Data visuzlization (ggplot2)
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(tidytuesdayR)
+
+library(data.table)
+library(viridis)
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+library(scales)
 ```
 
 ## Task 1: Climbing expeditions
@@ -31,7 +38,29 @@ The 2020-09-22 TidyTueday datasets are about climbing expeditions. From the thre
 -   The bar colors use the viridis palette and light theme.
 
 ```{r}
+df = read.csv("expeditions.csv")
+df = data.table(df)
 
+top_15_peaks = df %>%
+  select(peak_name, expedition_id) %>%
+  count(peak_name, sort = TRUE) %>%
+  slice_head(n = 15) %>%
+  select(peak_name)
+
+top_15_peaks = df %>%
+  inner_join(top_15_peaks, by = "peak_name") %>%
+  count(peak_name, season, sort = TRUE)
+
+ggplot(top_15_peaks, aes(x = n, y = reorder(peak_name, n, sum), fill = season)) +
+  geom_col() +
+  labs(
+    title = "The 15 most popular peaks stacked by season of expedition",
+    y = NULL,
+    x = "Number of expeditions"
+    ) +
+  theme_light() +
+  scale_fill_viridis_d(option = "viridis") +
+  theme(legend.position = "bottom")
 ```
 
 ## Task 2: PhDs awarded
@@ -45,7 +74,25 @@ Notes:
 -   The line size is 1.2, the colors are from the brewer "Dark2" palette. The theme is set to minimal.
 
 ```{r}
+df = read.csv("phd_by_field.csv")
+df = data.table(df)
 
+phds = df %>%
+  group_by(broad_field, year) %>%
+  summarize(n = sum(n_phds, na.rm = TRUE), .groups = "drop")
+
+ggplot(phds, aes(x = year, y = n, color = broad_field)) +
+  geom_line(linewidth = 1.2) +
+  scale_x_continuous(breaks = scales::pretty_breaks()) +
+  scale_y_continuous(labels = scales::comma_format()) +
+  scale_color_brewer(palette = "Dark2") +
+  theme_light() +
+  labs(
+    title = "Number of awarded Ph.D.-s in the US by year",
+    y = NULL,
+    x = NULL,
+    color = "Broad field"
+    )
 ```
 
 ## Task 3: Commute in the US
@@ -58,6 +105,29 @@ Notes:
 -   Both axis scales are log transformed and the labels comma formatted, using `scales::comma_format()`
 -   The point size is 2, . The theme is set to light.
 
-```{r}
+```{r, warning=FALSE}
+df = read.csv("commute.csv")
+df = data.table(df)
 
+commute = df %>%
+  select(state_region, state_abb, mode, n) %>%
+  group_by(state_region, state_abb, mode) %>%
+  summarize(N = sum(n, na.rm = TRUE), .groups = "drop") %>%
+  filter(mode %in% c("Walk", "Bike")) %>%
+  pivot_wider(names_from = mode, values_from = N)
+
+ggplot(commute, aes(x = Walk, y = Bike, color = state_region)) +
+  geom_point(size = 2) +
+  geom_text(aes(label = state_abb), color = "black") +
+  scale_x_log10(labels = scales::comma_format()) +
+  scale_y_log10(labels = scales::comma_format(), limits = c(25, NA)) +  # the choice of 25 as starting is arbitrary until the plot looked right :)
+  theme_light() +
+  labs(
+    title = "Number of people walking vs. biking to work in each USA state",
+    x = "Number of ppl walking to work (log N)",
+    y = "Number of ppl biking to work (log N)",
+    color = "State region"
+  )
+
+# Note that I don't know why not all state abbreviations appear on the example chart. My result looks therefore a bit messy. :)
 ```

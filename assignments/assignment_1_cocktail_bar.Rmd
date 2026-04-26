@@ -16,7 +16,11 @@ editor_options:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+
 library(tidyverse)
+
+library(data.table)
+library(dplyr)
 ```
 
 # Background
@@ -32,7 +36,16 @@ Note: There are several different ways to solve these tasks, feel free to come u
 Read the cocktail dataset from: <https://github.com/nthun/cocktail-balance> You can also find the codebook there.
 
 ```{r}
+path_to_df = "cocktail_data.tsv"
 
+df = read.csv(
+  path_to_df,
+  sep="\t",  # tab separator instead of default comma
+  )
+
+df = data.table(df)
+
+# head(df)  # display of dataframes is generally ugly, so don't :)
 ```
 
 ## 2. Transform the data table and clean the ingredient variable!
@@ -40,7 +53,55 @@ Read the cocktail dataset from: <https://github.com/nthun/cocktail-balance> You 
 The ingredients are currently in a single cell for each cocktail. It would be better to put them in separate rows. Also, the variable should be cleaned of all quantities (e.g. 1/2 oz, 2 dashes, etc.), and the indicator of alcohol content (e.g. 47.3% abv). You will need to use this cleaned table in later tasks.
 
 ```{r}
+ingredients = df$ingredients
 
+# we do text cleanup in "reverse" order - from complex regexes to simpler ones - to keep them consistent/readable after each operation
+# https://stringr.tidyverse.org/reference/str_replace.html
+
+# removing alcohol content
+ingredients = str_replace_all(ingredients, " \\(\\d+\\.\\d+% abv\\)", "")  # " (X.Y% abv)"
+ingredients = str_replace_all(ingredients, " \\(\\d+% abv\\)", "")  # " (X% abv)"
+
+# removing ounces
+ingredients = str_replace_all(ingredients, "\\d+\\.\\d+ oz ", "")  # "X.Y oz "
+ingredients = str_replace_all(ingredients, "\\d+ \\d+/\\d+ oz ", "")  # "X Y/Z oz "
+ingredients = str_replace_all(ingredients, "\\d+/\\d+ oz ", "")  # "X/Y oz "
+ingredients = str_replace_all(ingredients, "\\d+ oz ", "")  # "X oz "
+
+# removing dashes, drops, spoons
+ingredients = str_replace_all(ingredients, "\\d+ dashes ", "")  # "X dashes "
+ingredients = str_replace_all(ingredients, "\\d+ dash ", "")  # "X dash "
+ingredients = str_replace_all(ingredients, "\\d+ drops ", "")  # "X drops "
+ingredients = str_replace_all(ingredients, "\\d+ drop ", "")  # "X drop "
+ingredients = str_replace_all(ingredients, "\\d+ bsp ", "")  # "X bsp "
+
+# tidying on separators
+ingredients = str_replace_all(ingredients, "<br/>", ",")
+ingredients = str_replace_all(ingredients, "<br>", ",")
+ingredients = str_replace_all(ingredients, "<b4/>", ",")
+
+# some spotted errors
+ingredients = str_replace_all(ingredients, "cr\u008fme", "créme")  # 20th Century Cocktail
+ingredients = str_replace_all(ingredients, "sugard", "sugared")  # Blender Daiquiri
+ingredients = str_replace_all(ingredients, " orange", "orange")  # Blood and Sand
+ingredients = str_replace_all(ingredients, "gin ,", "gin,")  # Carbonated Negroni
+ingredients = str_replace_all(ingredients, " or ", ",")  # Carbonated Negroni
+ingredients = str_replace_all(ingredients, "simple,", "simple syrup,")  # Gin and Juice Centrifuge
+ingredients = str_replace_all(ingredients, "Marschino,", "Maraschino")  # Last Word
+
+ingredients = tolower(ingredients)
+
+# new table with only names and corresponding ingredients
+# https://tidyr.tidyverse.org/reference/separate_longer_delim.html
+df2 = data.table(df$name, ingredients)
+df2 = separate_longer_delim(df2, c("ingredients"), ",")
+
+# renaming and dropping duplicates (e.g. egg white in Clover Club)
+df2 = df2 %>%
+  select(cocktail=V1, ingr=ingredients) %>%
+  distinct()
+
+head(df2, 10)
 ```
 
 ## 3. All ingredients in alphabetical order
@@ -48,7 +109,10 @@ The ingredients are currently in a single cell for each cocktail. It would be be
 Before opening the bar, you need to find a reliable supplier that has all the ingredients. You need to send a list of all possible ingredients you will need. They don't need the quantities (i.e. how many of these are needed), just the names of the ingredients.
 
 ```{r}
-
+df2 %>%
+  select(ingr) %>%
+  distinct() %>%
+  arrange(ingr)
 ```
 
 ## 4. Number of unique ingredients
@@ -56,7 +120,10 @@ Before opening the bar, you need to find a reliable supplier that has all the in
 How many different ingredients you will need?
 
 ```{r}
-
+df2 %>%
+  select(ingr) %>%
+  distinct() %>%
+  count()
 ```
 
 ## 5. What are the top 10 ingredients?
@@ -64,7 +131,11 @@ How many different ingredients you will need?
 What are the 10 most frequently used ingredients? If there are ties, you can list more than 10.
 
 ```{r}
-
+df2 %>%
+  count(ingr, sort=TRUE) %>%
+  mutate(r = min_rank(desc(n))) %>%
+  filter(r <= 10) %>%
+  select(ingr)
 ```
 
 ## 6. Which cocktail(s) has/have the most ingredients?
@@ -72,7 +143,11 @@ What are the 10 most frequently used ingredients? If there are ties, you can lis
 Count the number of ingredients and filter all the cocktails that has that many.
 
 ```{r}
-
+df2 %>%
+  count(cocktail, sort = TRUE) %>%
+  mutate(r = min_rank(desc(n))) %>%
+  filter(r == 1) %>%
+  select(cocktail)
 ```
 
 ## 7. How many ingredients appear in only one cocktail (rare ingredient)?
@@ -80,19 +155,36 @@ Count the number of ingredients and filter all the cocktails that has that many.
 Count all cocktails with only one ingredient, and
 
 ```{r}
+# and..? :D
 
+rare_ingr_cocktails = df2 %>%
+  count(ingr) %>%
+  filter(n == 1) %>%
+  inner_join(df2, by = "ingr") %>%
+  select(cocktail) %>%
+  distinct() %>%
+  arrange(cocktail)
+
+rare_ingr_cocktails
 ```
 
 ## 8. Which cocktail has an ingredient that is only used in one cocktail?
 
 ```{r}
-
+# I don't understand this question... :D Isn't this the previous one framed in a convoluted manner?
 ```
 
 ## 9. What are the cocktails without rare ingredients?
 
 ```{r}
-  
+df2 %>%
+  left_join(rare_ingr_cocktails %>% 
+              mutate(x = 1), by = "cocktail"
+            ) %>% 
+  filter(is.na(x)) %>%
+  select(cocktail) %>%
+  distinct %>%
+  arrange(cocktail)
 ```
 
 ## 10. Create a cheat sheet for the bartender!
@@ -108,7 +200,13 @@ tribble(~name, ~Lime, ~`White rum`, ~`Cane sugar`, ~`Coca-cola`, ~Mint, ~Soda,
 ```
 
 ```{r}
-
+df2 %>%
+  mutate(x="X") %>%
+  pivot_wider(
+    names_from=ingr, 
+    values_from=x, 
+    values_fill=""
+  )
 ```
 
 

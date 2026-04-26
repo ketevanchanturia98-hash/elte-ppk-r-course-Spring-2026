@@ -54,12 +54,24 @@ In your discussion of the findings, briefly interpret the results of the above a
 
 # Solution
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(readxl)
+library(dplyr)
+library(lm.beta)
+
+library(DataExplorer) # The "cheat code" for automated EDA
+library(lmtest)
+library(car)
+```
+
 ## Read the data
 
 Read the dataset used in this assignment. Pay attention to the extension of the datafile.
 
 ```{r}
-
+df = read_excel("assignment_3_dataset.xlsx")
 ```
 
 ## Data and model diagnostics 
@@ -68,16 +80,27 @@ Read the dataset used in this assignment. Pay attention to the extension of the 
 
 Run an exploratory data analysis (EDA) to investigate the dataset.
 
-```{r}
+```{r, message=FALSE, results='hide'}
+# create_report(df) # disabled, but comments below indicate the analysis.
 
+# outlier 50 in column-pain
+# "woman" label in column-sex
 ```
 
 #### Correct coding errors
 
 If you find values in the dataset during the EDA, that are not correct based on the provided descriptions of the variables of the dataset please correct them here.
 
-```{r}
+```{r, message=FALSE, results='hide'}
+df = df %>%
+  mutate(pain = if_else(pain > 10, 10, pain)) %>%
+  mutate(sex = if_else(sex == "woman", "female", sex))
 
+df$sex = as.factor(df$sex)
+
+# df = df[-c(142),]
+
+create_report(df) # re-run to see if we missed anything
 ```
 
 ### Model diagnostics
@@ -86,7 +109,7 @@ If you find values in the dataset during the EDA, that are not correct based on 
 In order to test the more complex model for outliers and to test the assumptions first build the model.
 
 ```{r}
-
+m1 = lm(pain ~ age + sex, data = df)
 ```
 
 #### Checking for influential outliers
@@ -94,7 +117,13 @@ In order to test the more complex model for outliers and to test the assumptions
 Check for outlier values in the model.
 
 ```{r}
+# Cook’s Distance: this measures how much all the fitted values in the model change when a specific observation is removed.
+plot(m1, which = 4)
 
+# df[c(81, 123, 142), ]
+
+# Bonferroni outlier test. This identifies observations with the most extreme studentized residuals.
+outlierTest(m1)
 ```
 
 #### Checking assumptions
@@ -102,19 +131,31 @@ Check for outlier values in the model.
 Check the normality assumption.
 
 ```{r}
+# Q-Q plot: if the residuals are normal, the points will fall approximately along the diagonal dashed line.
+plot(m1, which = 2)
 
+# Shapiro-Wilk Test: The null hypothesis is that the residuals are normally distributed. If p < 0.05, reject the null and assume non-normality.
+shapiro.test(residuals(m1)) # p-value = 0.3601
 ```
 
 Check the linearity assumption.
 
 ```{r}
+# The first diagnostic plot (which = 1) is the residuals vs fitted plot
+plot(m1, which = 1)
 
+# The Rainbow Test checks if a linear fit is appropriate for the central subset of the data compared to the whole dataset. If p < 0.05, the relationship is likely nonlinear.
+raintest(m1)
 ```
 
 Check the homoscedasticty assumption (homogeneity of variance).
 
 ```{r}
+# The 3rd diagnostic plot is specifically for homoscedasticity
+plot(m1, which = 3)
 
+bptest(m1) # p-value = 0.04904
+# thus the null hypothesis of homoskedasticity is rejected and heteroskedasticity assumed...
 ```
 
 Check the multicollinearity assumption.
@@ -126,7 +167,7 @@ https://statisticalhorizons.com/multicollinearity
 http://blog.minitab.com/blog/understanding-statistics/handling-multicollinearity-in-regression-analysis
 
 ```{r}
-
+vif(m1)
 ```
 
 ### Making decision based on model diagnostics
@@ -134,13 +175,15 @@ http://blog.minitab.com/blog/understanding-statistics/handling-multicollinearity
 If based on the assumption tests you decide to drop a predictor variable you should do that here. Create your updated model.
 
 ```{r}
-
+m2 = lm(pain ~ age + sex + STAI_trait + pain_cat + mindfulness + cortisol_serum + cortisol_saliva, data = df)
 ```
 
 #### Checking outliers of the updated model
 
 ```{r}
+plot(m2, which = 4)
 
+outlierTest(m2) # p-value = 0.0451
 ```
 
 #### Checking assumptions of the updated model
@@ -148,25 +191,28 @@ If based on the assumption tests you decide to drop a predictor variable you sho
 Normality assumption
 
 ```{r}
-
+plot(m2, which = 2)
+shapiro.test(residuals(m2)) # p-value = 0.5528
 ```
 
 Linearity assumption
 
 ```{r}
-
+plot(m2, which = 1)
+raintest(m2) # p-value = 0.238
 ```
 
 Homoscedasticty assumption (homogeneity of variance)
 
 ```{r}
-
+plot(m2, which = 3)
+bptest(m2) # p-value = 0.4455
 ```
 
 Multicollinearity assumption
 
 ```{r}
-
+vif(m2)
 ```
 
 ## Model comparison
@@ -174,18 +220,21 @@ Multicollinearity assumption
 Create the simple model and get the results of the model that needs to be reported based on the What to report section.
 
 ```{r}
-
+summary(m1)
+AIC(m1) # 592.191
 ```
 
 Create the more complex model based on the results of the model diagnostics. Also, get the results that needs to be reported based on the What to report section.
 
 ```{r}
+summary(m2)
 
+AIC(m2) # 546.1959, less than AIC(m1), so m2 is better fit than m1
 ```
 
 Compare the two models.
 
 ```{r}
-
+anova(m1, m2) # p = 2.412e-10 meaning m2 explains more variance
 ```
 
